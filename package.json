@@ -1,6 +1,6 @@
 {
     "name": "envark",
-    "version": "0.1.1",
+    "version": "0.1.2",
     "description": "Envark - Production-quality MCP server that maps, analyzes, and guards environment variables across your entire codebase",
     "type": "module",
     "main": "dist/index.js",
