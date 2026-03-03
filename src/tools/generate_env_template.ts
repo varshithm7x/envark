@@ -1,0 +1,282 @@
+/**
+ * generate_env_template tool - Generate a complete .env.example from codebase analysis
+ */
+
+import { writeFileSync } from 'fs';
+import { resolve, isAbsolute } from 'path';
+import { scanProject, normalizeProjectPath } from '../core/scanner.js';
+import { resolveEnvMap, groupByCluster } from '../core/resolver.js';
+
+export interface GenerateEnvTemplateInput {
+    projectPath?: string;
+    outputPath?: string;
+}
+
+export interface GenerateEnvTemplateOutput {
+    content: string;
+    variableCount: number;
+    clusterCount: number;
+    requiredCount: number;
+    optionalCount: number;
+    writtenTo?: string;
+    metadata: {
+        projectPath: string;
+        scannedFiles: number;
+        cacheHit: boolean;
+        duration: number;
+    };
+}
+
+// Secret-like patterns
+const SECRET_PATTERNS = [
+    /SECRET/i,
+    /PASSWORD/i,
+    /TOKEN/i,
+    /KEY$/i,
+    /API_KEY/i,
+    /PRIVATE/i,
+    /CREDENTIAL/i,
+];
+
+// Description patterns for common variable names
+const DESCRIPTION_PATTERNS: Array<[RegExp, string]> = [
+    [/^DATABASE_URL$/i, 'Database connection string'],
+    [/^DB_HOST$/i, 'Database host address'],
+    [/^DB_PORT$/i, 'Database port number'],
+    [/^DB_USER(NAME)?$/i, 'Database username'],
+    [/^DB_PASSWORD$/i, 'Database password'],
+    [/^DB_NAME$/i, 'Database name'],
+    [/^REDIS_URL$/i, 'Redis connection string'],
+    [/^API_KEY$/i, 'API key'],
+    [/^JWT_SECRET$/i, 'Secret key for JWT token signing'],
+    [/^SESSION_SECRET$/i, 'Secret key for session encryption'],
+    [/^PORT$/i, 'Server port number'],
+    [/^HOST$/i, 'Server host address'],
+    [/^NODE_ENV$/i, 'Node.js environment (development/production/test)'],
+    [/^LOG_LEVEL$/i, 'Logging level (debug/info/warn/error)'],
+    [/^DEBUG$/i, 'Enable debug mode'],
+    [/^BASE_URL$/i, 'Base URL for the application'],
+    [/^FRONTEND_URL$/i, 'Frontend application URL'],
+    [/^BACKEND_URL$/i, 'Backend API URL'],
+    [/^CORS_ORIGIN$/i, 'Allowed CORS origin'],
+];
+
+/**
+ * Generate description for a variable
+ */
+function generateDescription(name: string, documentation?: string): string {
+    // Use existing documentation if available
+    if (documentation) {
+        return documentation;
+    }
+
+    // Check known patterns
+    for (const [pattern, desc] of DESCRIPTION_PATTERNS) {
+        if (pattern.test(name)) {
+            return desc;
+        }
+    }
+
+    // Generate from name parts
+    const parts = name.split('_');
+
+    // Handle common prefixes
+    if (parts[0] === 'AWS') return `AWS ${parts.slice(1).join(' ').toLowerCase()} configuration`;
+    if (parts[0] === 'STRIPE') return `Stripe ${parts.slice(1).join(' ').toLowerCase()}`;
+    if (parts[0] === 'SENDGRID') return `SendGrid ${parts.slice(1).join(' ').toLowerCase()}`;
+    if (parts[0] === 'SMTP') return `SMTP ${parts.slice(1).join(' ').toLowerCase()}`;
+    if (parts[0] === 'SENTRY') return `Sentry ${parts.slice(1).join(' ').toLowerCase()}`;
+    if (parts[0] === 'DATADOG') return `Datadog ${parts.slice(1).join(' ').toLowerCase()}`;
+
+    // Generic description
+    return parts.map(p => p.toLowerCase()).join(' ');
+}
+
+/**
+ * Generate placeholder value for a variable
+ */
+function generatePlaceholder(name: string, hasDefault: boolean): string {
+    // Check for secret-like patterns
+    if (SECRET_PATTERNS.some(p => p.test(name))) {
+        return 'your-secret-here';
+    }
+
+    // Common patterns
+    if (/_URL$/i.test(name)) return 'https://example.com';
+    if (/_HOST$/i.test(name)) return 'localhost';
+    if (/_PORT$/i.test(name)) return '3000';
+    if (/^PORT$/i.test(name)) return '3000';
+    if (/_EMAIL$/i.test(name)) return 'user@example.com';
+    if (/^NODE_ENV$/i.test(name)) return 'development';
+    if (/^LOG_LEVEL$/i.test(name)) return 'info';
+    if (/^DEBUG$/i.test(name)) return 'false';
+
+    return hasDefault ? '' : 'your-value-here';
+}
+
+/**
+ * Check if variable is likely required
+ */
+function isRequired(name: string, hasDefault: boolean): boolean {
+    // If it has a default, it's optional
+    if (hasDefault) return false;
+
+    // Critical variables are always required
+    const criticalPatterns = [
+        /^DATABASE/i,
+        /^DB_/i,
+        /^REDIS/i,
+        /SECRET/i,
+        /^API_KEY$/i,
+    ];
+
+    return criticalPatterns.some(p => p.test(name));
+}
+
+/**
+ * Execute the generate_env_template tool
+ */
+export async function generateEnvTemplate(input: GenerateEnvTemplateInput): Promise<GenerateEnvTemplateOutput> {
+    const projectPath = normalizeProjectPath(input.projectPath);
+
+    // Scan project
+    const scanResult = scanProject(projectPath);
+
+    // Resolve
+    const resolved = resolveEnvMap(scanResult.usages);
+
+    // Group by cluster
+    const clusters = groupByCluster(resolved);
+
+    // Generate template content
+    const lines: string[] = [];
+    let variableCount = 0;
+    let requiredCount = 0;
+    let optionalCount = 0;
+
+    // Header
+    lines.push('# Environment Variables');
+    lines.push('# Generated by Aegis');
+    lines.push('#');
+    lines.push('# Required variables are marked with [REQUIRED]');
+    lines.push('# Optional variables (with defaults) are marked with [OPTIONAL]');
+    lines.push('');
+
+    // Sort clusters for consistent output
+    const clusterOrder = [
+        'Server',
+        'Database',
+        'Caching',
+        'Authentication',
+        'API',
+        'Email',
+        'Monitoring',
+        'AWS',
+        'Google Cloud',
+        'Azure',
+        'Payment',
+        'Framework',
+        'Secrets',
+        'Other',
+    ];
+
+    const sortedClusters = Array.from(clusters.entries()).sort((a, b) => {
+        const aIndex = clusterOrder.indexOf(a[0]);
+        const bIndex = clusterOrder.indexOf(b[0]);
+        if (aIndex === -1 && bIndex === -1) return a[0].localeCompare(b[0]);
+        if (aIndex === -1) return 1;
+        if (bIndex === -1) return -1;
+        return aIndex - bIndex;
+    });
+
+    for (const [clusterName, variables] of sortedClusters) {
+        // Skip if no variables used in code
+        const usedVars = variables.filter(v => v.usedInCode);
+        if (usedVars.length === 0) continue;
+
+        // Cluster header
+        lines.push(`# ============================================`);
+        lines.push(`# ${clusterName}`);
+        lines.push(`# ============================================`);
+        lines.push('');
+
+        // Sort variables: required first, then alphabetically
+        usedVars.sort((a, b) => {
+            const aReq = isRequired(a.name, a.hasDefault);
+            const bReq = isRequired(b.name, b.hasDefault);
+            if (aReq !== bReq) return aReq ? -1 : 1;
+            return a.name.localeCompare(b.name);
+        });
+
+        for (const variable of usedVars) {
+            const description = generateDescription(variable.name, variable.documentation);
+            const placeholder = generatePlaceholder(variable.name, variable.hasDefault);
+            const required = isRequired(variable.name, variable.hasDefault);
+
+            // Description comment
+            const reqTag = required ? '[REQUIRED]' : '[OPTIONAL]';
+            lines.push(`# ${description} ${reqTag}`);
+
+            // Variable
+            lines.push(`${variable.name}=${placeholder}`);
+            lines.push('');
+
+            variableCount++;
+            if (required) {
+                requiredCount++;
+            } else {
+                optionalCount++;
+            }
+        }
+    }
+
+    const content = lines.join('\n');
+
+    // Write to file if outputPath provided
+    let writtenTo: string | undefined;
+    if (input.outputPath) {
+        const outputPath = isAbsolute(input.outputPath)
+            ? input.outputPath
+            : resolve(projectPath, input.outputPath);
+
+        writeFileSync(outputPath, content, 'utf-8');
+        writtenTo = outputPath;
+    }
+
+    return {
+        content,
+        variableCount,
+        clusterCount: clusters.size,
+        requiredCount,
+        optionalCount,
+        writtenTo,
+        metadata: {
+            projectPath,
+            scannedFiles: scanResult.scannedFiles,
+            cacheHit: scanResult.cacheHit,
+            duration: scanResult.duration,
+        },
+    };
+}
+
+/**
+ * Tool definition for MCP registration
+ */
+export const generateEnvTemplateTool = {
+    name: 'generate_env_template',
+    description: 'Scan the entire codebase and generate a complete .env.example file from scratch. Groups variables by detected cluster, adds inferred descriptions, and marks which are required vs optional',
+    inputSchema: {
+        type: 'object' as const,
+        properties: {
+            projectPath: {
+                type: 'string',
+                description: 'Path to the project directory. Defaults to current working directory.',
+            },
+            outputPath: {
+                type: 'string',
+                description: 'Path to write the generated .env.example file. If not provided, only returns the content.',
+            },
+        },
+        required: [],
+    },
+};

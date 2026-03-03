@@ -1,0 +1,62 @@
+{
+    "name": "envark",
+    "version": "0.1.0",
+    "description": "Envark - Production-quality MCP server that maps, analyzes, and guards environment variables across your entire codebase",
+    "type": "module",
+    "main": "dist/index.js",
+    "bin": {
+        "envark": "dist/index.js"
+    },
+    "scripts": {
+        "build": "tsc",
+        "dev": "bun run src/index.ts",
+        "start": "node dist/index.js",
+        "prepublishOnly": "npm run build"
+    },
+    "keywords": [
+        "mcp",
+        "environment-variables",
+        "env",
+        "dotenv",
+        "security",
+        "devtools",
+        "static-analysis",
+        "model-context-protocol",
+        "cli",
+        "envark"
+    ],
+    "author": "",
+    "license": "MIT",
+    "dependencies": {
+        "@anthropic-ai/sdk": "^0.32.0",
+        "@google/generative-ai": "^0.24.1",
+        "@modelcontextprotocol/sdk": "^1.0.0",
+        "boxen": "^8.0.1",
+        "chalk": "^5.3.0",
+        "cli-table3": "^0.6.5",
+        "figlet": "^1.7.0",
+        "gradient-string": "^3.0.0",
+        "ink": "^5.0.1",
+        "ink-select-input": "^6.0.0",
+        "ink-spinner": "^5.0.0",
+        "ink-text-input": "^6.0.0",
+        "ollama": "^0.5.11",
+        "openai": "^4.73.0",
+        "ora": "^8.1.0",
+        "react": "^18.3.1"
+    },
+    "devDependencies": {
+        "@types/figlet": "^1.5.8",
+        "@types/gradient-string": "^1.1.6",
+        "@types/node": "^20.10.0",
+        "@types/react": "^18.3.12",
+        "typescript": "^5.3.0"
+    },
+    "engines": {
+        "node": ">=18.0.0"
+    },
+    "files": [
+        "dist",
+        "README.md"
+    ]
+}
