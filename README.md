@@ -2,7 +2,7 @@
 
 <div align="center">
 
-![Envark Banner](assets/banner.png)
+![Envark Banner](https://raw.githubusercontent.com/kstij/Envark/main/assets/banner.png)
 
 **A production-quality MCP server and interactive TUI that maps, analyzes, and guards environment variables across your entire codebase.**
 
@@ -62,13 +62,13 @@ npx envark
 
 Type `/` to open the command dropdown with all available commands:
 
-![Command Menu](assets/dropdown.png)
+![Command Menu](https://raw.githubusercontent.com/kstij/Envark/main/assets/dropdown.png)
 
 ### Scan Results
 
 Run `/scan` to analyze your project's environment variables:
 
-![Scan Results](assets/scan.png)
+![Scan Results](assets/scan.png)(https://raw.githubusercontent.com/kstij/Envark/main/assets/scan.png)
 
 ### Available Commands
 
