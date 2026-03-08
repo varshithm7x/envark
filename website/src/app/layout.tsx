@@ -1,20 +1,20 @@
-import React from 'react';
-import type { Metadata, Viewport } from 'next';
-import '../styles/index.css';
+import type { Metadata } from "next";
+import { Geist, Geist_Mono } from "next/font/google";
+import "./globals.css";
 
-export const viewport: Viewport = {
-  width: 'device-width',
-  initialScale: 1,
-};
+const geistSans = Geist({
+  variable: "--font-geist-sans",
+  subsets: ["latin"],
+});
+
+const geistMono = Geist_Mono({
+  variable: "--font-geist-mono",
+  subsets: ["latin"],
+});
 
 export const metadata: Metadata = {
-  title: 'Envark Guard Your Env Vars Before They Break Prod',
-  description: 'Envark maps, analyzes, and guards environment variables across your entire codebase. MCP server + interactive TUI. Pure static analysis no data leaves your machine.',
-  icons: {
-    icon: [
-      { url: '/assets/images/app_logo.png', type: 'image/x-icon' }
-    ],
-  },
+  title: "Envark | Analyze and guard environment variables",
+  description: "A production-quality MCP server and interactive TUI that maps, analyzes, and guards environment variables across your entire codebase.",
 };
 
 export default function RootLayout({
@@ -24,7 +24,13 @@ export default function RootLayout({
 }>) {
   return (
     <html lang="en">
-      <body>{children}
+      <head>
+        <meta name="viewport" content="width=device-width, initial-scale=1" />
+      </head>
+      <body
+        className={`${geistSans.variable} ${geistMono.variable} antialiased`}
+      >
+        {children}
       </body>
     </html>
   );
